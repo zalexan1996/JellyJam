@@ -51,69 +51,7 @@ public sealed class PlaybackCoordinator
         try
         {
             await foreach (var message in messages.Reader.ReadAllAsync(cancellationToken))
-            {
-                if (message.Random is { } random && message.Repeat is { } repeat)
-                {
-                    selector.SetModes(random, repeat);
-                    Publish(snapshot.Status, "Playback modes changed");
-                    message.Completion?.TrySetResult();
-                    continue;
-                }
-                if (message.Action is { } action)
-                {
-                    switch (action)
-                    {
-                        case PlayerAction.Play:
-                            if (snapshot.Status is PlayerStatus.Playing or PlayerStatus.Loading) break;
-                            selector = new TrackSelector(tracks, selector.RandomMode, selector.RepeatMode);
-                            Start(selector.Next(), cancellationToken);
-                            break;
-                        case PlayerAction.Next:
-                            selector.DiscardPending();
-                            Start(selector.Next(), cancellationToken);
-                            break;
-                        case PlayerAction.Previous:
-                            var discarded = selector.DiscardPending();
-                            var previous = discarded ? selector.Current : selector.Previous();
-                            if (discarded || previous is not null) Start(previous, cancellationToken);
-                            break;
-                        case PlayerAction.CycleRandom:
-                            selector.SetModes((RandomMode)(((int)selector.RandomMode + 1) % 4), selector.RepeatMode);
-                            Publish(snapshot.Status, "Random mode changed");
-                            break;
-                        case PlayerAction.CycleRepeat:
-                            selector.SetModes(selector.RandomMode, (RepeatMode)(((int)selector.RepeatMode + 1) % 3));
-                            Publish(snapshot.Status, "Repeat mode changed");
-                            break;
-                        case PlayerAction.Stop:
-                            selector.DiscardPending();
-                            CancelCurrent();
-                            Publish(PlayerStatus.Stopped, "Stopped");
-                            break;
-                    }
-                    continue;
-                }
-                if (message.Generation != generation) continue;
-                if (message.Started)
-                {
-                    selector.ConfirmCurrent();
-                    Publish(PlayerStatus.Playing, "Streaming");
-                }
-                else if (message.Failure is { } failure)
-                {
-                    if (failure.Fatal)
-                    {
-                        CancelCurrent();
-                        Publish(PlayerStatus.Error, failure.Message);
-                    }
-                    else
-                    {
-                        if (selector.Current is { } failed) selector.MarkFailed(failed);
-                        Start(selector.Next(), cancellationToken, failure.Message);
-                    }
-                }
-                else Start(selector.Next(naturalCompletion: true), cancellationToken);
-            }
+                Handle(message, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
         finally
@@ -123,6 +61,87 @@ public sealed class PlaybackCoordinator
             messages.Writer.TryComplete();
             Publish(PlayerStatus.Stopped, "Session ended");
         }
+    }
+
+    private void Handle(Message message, CancellationToken cancellationToken)
+    {
+        if (message.Random is { } random && message.Repeat is { } repeat)
+            ApplyModes(random, repeat, message.Completion);
+        else if (message.Action is { } action)
+            Handle(action, cancellationToken);
+        else if (message.Generation == generation)
+            HandleTrackEvent(message, cancellationToken);
+    }
+
+    private void ApplyModes(RandomMode random, RepeatMode repeat, TaskCompletionSource? completion)
+    {
+        selector.SetModes(random, repeat);
+        Publish(snapshot.Status, "Playback modes changed");
+        completion?.TrySetResult();
+    }
+
+    private void Handle(PlayerAction action, CancellationToken cancellationToken)
+    {
+        switch (action)
+        {
+            case PlayerAction.Play:
+                if (snapshot.Status is PlayerStatus.Playing or PlayerStatus.Loading) break;
+                selector = new TrackSelector(tracks, selector.RandomMode, selector.RepeatMode);
+                Start(selector.Next(), cancellationToken);
+                break;
+            case PlayerAction.Next:
+                selector.DiscardPending();
+                Start(selector.Next(), cancellationToken);
+                break;
+            case PlayerAction.Previous:
+                var discarded = selector.DiscardPending();
+                var previous = discarded ? selector.Current : selector.Previous();
+                if (discarded || previous is not null) Start(previous, cancellationToken);
+                break;
+            case PlayerAction.CycleRandom:
+                selector.SetModes(NextValue(selector.RandomMode), selector.RepeatMode);
+                Publish(snapshot.Status, "Random mode changed");
+                break;
+            case PlayerAction.CycleRepeat:
+                selector.SetModes(selector.RandomMode, NextValue(selector.RepeatMode));
+                Publish(snapshot.Status, "Repeat mode changed");
+                break;
+            case PlayerAction.Stop:
+                selector.DiscardPending();
+                CancelCurrent();
+                Publish(PlayerStatus.Stopped, "Stopped");
+                break;
+        }
+    }
+
+    private void HandleTrackEvent(Message message, CancellationToken cancellationToken)
+    {
+        if (message.Started)
+        {
+            selector.ConfirmCurrent();
+            Publish(PlayerStatus.Playing, "Streaming");
+        }
+        else if (message.Failure is { } failure)
+            HandleFailure(failure, cancellationToken);
+        else Start(selector.Next(naturalCompletion: true), cancellationToken);
+    }
+
+    private void HandleFailure(JellyJamException failure, CancellationToken cancellationToken)
+    {
+        if (failure.Fatal)
+        {
+            CancelCurrent();
+            Publish(PlayerStatus.Error, failure.Message);
+            return;
+        }
+        if (selector.Current is { } failed) selector.MarkFailed(failed);
+        Start(selector.Next(), cancellationToken, failure.Message);
+    }
+
+    private static T NextValue<T>(T current) where T : struct, Enum
+    {
+        var values = Enum.GetValues<T>();
+        return values[(Array.IndexOf(values, current) + 1) % values.Length];
     }
 
     private void Start(Track? track, CancellationToken cancellationToken, string? failure = null)

@@ -7,6 +7,11 @@ namespace JellyJam.Core.Jellyfin;
 
 public sealed class JellyfinClient : IJellyfinSessionClient
 {
+    private const string Mp3 = "mp3";
+    private const int MaxBitrate = 320_000;
+    private const int MaxChannels = 2;
+    private const int PageSize = 500;
+    private const int MaxRetries = 2;
     private readonly JellyfinSdkSettings settings = new();
     private readonly JellyfinApiClient client;
     private readonly PlayerConfiguration configuration;
@@ -48,19 +53,13 @@ public sealed class JellyfinClient : IJellyfinSessionClient
                 request.QueryParameters.IncludeItemTypes = [BaseItemKind.Audio];
                 request.QueryParameters.SortBy = [ItemSortBy.SortName];
                 request.QueryParameters.StartIndex = start;
-                request.QueryParameters.Limit = 500;
+                request.QueryParameters.Limit = PageSize;
             }, cancellationToken), cancellationToken);
             var items = result?.Items ?? [];
             if (items.Count == 0) break;
             var previousCount = tracks.Count;
             foreach (var item in items)
-            {
-                if (item.Id is not { } id) continue;
-                var artist = item.ArtistItems?.FirstOrDefault();
-                tracks.TryAdd(id, new Track(id, item.Name ?? "Untitled", artist?.Name ?? item.Artists?.FirstOrDefault() ?? "Unknown artist",
-                    item.Album ?? "Unknown album", artist?.Id, item.AlbumId, item.ParentIndexNumber ?? 0, item.IndexNumber ?? 0,
-                    item.RunTimeTicks is > 0 ? TimeSpan.FromTicks(item.RunTimeTicks.Value) : null));
-            }
+                if (item.Id is { } id) tracks.TryAdd(id, ToTrack(id, item));
             start += items.Count;
             if (result?.TotalRecordCount is { } total && start >= total) break;
             if (tracks.Count == previousCount) throw new JellyJamException("The server returned a repeated library page. Try again after the library scan finishes.");
@@ -68,41 +67,54 @@ public sealed class JellyfinClient : IJellyfinSessionClient
         return tracks.Values.ToArray();
     }
 
+    private static Track ToTrack(Guid id, BaseItemDto item)
+    {
+        var artist = item.ArtistItems?.FirstOrDefault();
+        return new Track(id, item.Name ?? "Untitled", artist?.Name ?? item.Artists?.FirstOrDefault() ?? "Unknown artist",
+            item.Album ?? "Unknown album", artist?.Id, item.AlbumId, item.ParentIndexNumber ?? 0, item.IndexNumber ?? 0,
+            item.RunTimeTicks is > 0 ? TimeSpan.FromTicks(item.RunTimeTicks.Value) : null);
+    }
+
     public async Task<PlaybackSource> ResolveAsync(Track track, CancellationToken cancellationToken)
     {
-        var result = await RequestAsync(() => client.Items[track.Id].PlaybackInfo.PostAsync(new PlaybackInfoDto
-        {
-            UserId = configuration.UserId,
-            EnableDirectPlay = true,
-            EnableDirectStream = true,
-            EnableTranscoding = true,
-            MaxStreamingBitrate = 320000,
-            MaxAudioChannels = 2,
-            DeviceProfile = new DeviceProfile
-            {
-                Name = "JellyJam MP3",
-                MaxStreamingBitrate = 320000,
-                DirectPlayProfiles = [new DirectPlayProfile { Container = "mp3", AudioCodec = "mp3", Type = DirectPlayProfile_Type.Audio }],
-                TranscodingProfiles = [new TranscodingProfile
-                {
-                    Container = "mp3", AudioCodec = "mp3", Type = TranscodingProfile_Type.Audio,
-                    Protocol = TranscodingProfile_Protocol.Http, Context = TranscodingProfile_Context.Streaming,
-                    MaxAudioChannels = "2"
-                }]
-            }
-        }, cancellationToken: cancellationToken), cancellationToken, trackRequest: true);
-        var source = result?.MediaSources?.FirstOrDefault(media =>
-            (media.SupportsDirectPlay == true && string.Equals(media.Container, "mp3", StringComparison.OrdinalIgnoreCase)) ||
-            (media.SupportsTranscoding == true && !string.IsNullOrEmpty(media.TranscodingUrl)));
+        var result = await RequestAsync(() => client.Items[track.Id].PlaybackInfo.PostAsync(
+            CreatePlaybackInfoRequest(), cancellationToken: cancellationToken), cancellationToken, trackRequest: true);
+        var source = result?.MediaSources?.FirstOrDefault(media => CanDirectPlay(media) || CanTranscode(media));
         if (source is null) throw new JellyJamException("No compatible MP3 stream. Check this user's Jellyfin transcoding permission.", false);
         var session = result?.PlaySessionId ?? "";
-        string path;
-        if (source.SupportsDirectPlay == true && string.Equals(source.Container, "mp3", StringComparison.OrdinalIgnoreCase))
-            path = $"Audio/{track.Id:N}/stream.mp3?static=true&mediaSourceId={Uri.EscapeDataString(source.Id ?? "")}&playSessionId={Uri.EscapeDataString(session)}&deviceId={Uri.EscapeDataString(configuration.DeviceId)}";
-        else
-            path = source.TranscodingUrl!;
+        var path = CanDirectPlay(source)
+            ? $"Audio/{track.Id:N}/stream.mp3?static=true&mediaSourceId={Uri.EscapeDataString(source.Id ?? "")}&playSessionId={Uri.EscapeDataString(session)}&deviceId={Uri.EscapeDataString(configuration.DeviceId)}"
+            : source.TranscodingUrl!;
         return new PlaybackSource(ResolveStreamUri(configuration.ServerUrl, path), token, session, track.Id);
     }
+
+    private PlaybackInfoDto CreatePlaybackInfoRequest() => new()
+    {
+        UserId = configuration.UserId,
+        EnableDirectPlay = true,
+        EnableDirectStream = true,
+        EnableTranscoding = true,
+        MaxStreamingBitrate = MaxBitrate,
+        MaxAudioChannels = MaxChannels,
+        DeviceProfile = new DeviceProfile
+        {
+            Name = "JellyJam MP3",
+            MaxStreamingBitrate = MaxBitrate,
+            DirectPlayProfiles = [new DirectPlayProfile { Container = Mp3, AudioCodec = Mp3, Type = DirectPlayProfile_Type.Audio }],
+            TranscodingProfiles = [new TranscodingProfile
+            {
+                Container = Mp3, AudioCodec = Mp3, Type = TranscodingProfile_Type.Audio,
+                Protocol = TranscodingProfile_Protocol.Http, Context = TranscodingProfile_Context.Streaming,
+                MaxAudioChannels = MaxChannels.ToString()
+            }]
+        }
+    };
+
+    private static bool CanDirectPlay(MediaSourceInfo media)
+        => media.SupportsDirectPlay == true && string.Equals(media.Container, Mp3, StringComparison.OrdinalIgnoreCase);
+
+    private static bool CanTranscode(MediaSourceInfo media)
+        => media.SupportsTranscoding == true && !string.IsNullOrEmpty(media.TranscodingUrl);
 
     public static Uri ResolveStreamUri(string serverUrl, string path)
     {
@@ -144,7 +156,7 @@ public sealed class JellyfinClient : IJellyfinSessionClient
             catch (Exception error) when (error is HttpRequestException or ApiException or OperationCanceledException)
             {
                 var transient = error is not ApiException api || api.ResponseStatusCode is 408 or 429 or >= 500;
-                if (retry && transient && attempt < 2)
+                if (retry && transient && attempt < MaxRetries)
                 {
                     await Task.Delay(TimeSpan.FromMilliseconds(250 * (attempt + 1)), cancellationToken);
                     continue;

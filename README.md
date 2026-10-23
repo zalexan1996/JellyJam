@@ -52,17 +52,17 @@ Spectrum mapping, signed FFT values, silence, sample-rate handling, and peak dec
 
 ### Build and Install
 
-Android is kept in [JellyJam.Android.slnx](JellyJam.Android.slnx), separate from the CLI solution. Building or testing the CLI does not require MAUI workloads.
+Android is kept in [JellyJam.MAUI.slnx](JellyJam.MAUI.slnx), separate from the CLI solution. Building or testing the CLI does not require MAUI workloads.
 
 For a fresh development machine, install the .NET 10 `maui-android` workload, the Android SDK, and the JDK required by that workload. The .NET Android dependency target can install the latter two into user-selected directories after accepting the SDK licenses:
 
 ```powershell
 dotnet workload install maui-android
-dotnet build src/JellyJam.Android -t:InstallAndroidDependencies `
+dotnet build src/JellyJam.MAUI -t:InstallAndroidDependencies `
 	-p:AndroidSdkDirectory="$env:LOCALAPPDATA/Android/Sdk" `
 	-p:JavaSdkDirectory="$env:LOCALAPPDATA/Android/Jdk" `
 	-p:AcceptAndroidSDKLicenses=True
-dotnet build JellyJam.Android.slnx `
+dotnet build JellyJam.MAUI.slnx `
 	-p:AndroidSdkDirectory="$env:LOCALAPPDATA/Android/Sdk" `
 	-p:JavaSdkDirectory="$env:LOCALAPPDATA/Android/Jdk"
 ```
@@ -70,25 +70,25 @@ dotnet build JellyJam.Android.slnx `
 This workspace also has an ignored, isolated toolchain under `artifacts/toolchain`, used for development verification without changing the machine-wide SDK:
 
 ```powershell
-.\artifacts\toolchain\dotnet\dotnet.exe build JellyJam.Android.slnx `
+.\artifacts\toolchain\dotnet\dotnet.exe build JellyJam.MAUI.slnx `
 	-p:AndroidSdkDirectory="$PWD/artifacts/toolchain/android-sdk" `
 	-p:JavaSdkDirectory="$PWD/artifacts/toolchain/jdk"
 ```
 
-The build produces `src/JellyJam.Android/bin/Debug/net10.0-android/app.jellyjam.radio-Signed.apk`. Assemblies are embedded so the APK can be sideloaded without IDE Fast Deployment. It uses a development signing key, not a production/store signing identity. With an Android device connected and USB debugging authorized, install using `adb install -r` and that APK path.
+The build produces `src/JellyJam.MAUI/bin/Debug/net10.0-android/app.jellyjam.radio-Signed.apk`. Assemblies are embedded so the APK can be sideloaded without IDE Fast Deployment. It uses a development signing key, not a production/store signing identity. With an Android device connected and USB debugging authorized, install using `adb install -r` and that APK path.
 
 ### Physical Phones
 
 For ARM64 phones such as the Galaxy S23, an ARM64-only Release profile is available. This produces a non-debuggable APK without emulator libraries. It still uses the development signing key; it is not a store-signed release. Trimming and AOT compilation are disabled in this diagnostic profile to preserve the existing managed application behavior.
 
 ```powershell
-.\artifacts\toolchain\dotnet\dotnet.exe publish src/JellyJam.Android -c Release -r android-arm64 `
+.\artifacts\toolchain\dotnet\dotnet.exe publish src/JellyJam.MAUI -c Release -r android-arm64 `
 	-p:PublishProfile=AndroidArm64 `
 	-p:AndroidSdkDirectory="$PWD/artifacts/toolchain/android-sdk" `
 	-p:JavaSdkDirectory="$PWD/artifacts/toolchain/jdk"
 ```
 
-The signed output is `src/JellyJam.Android/bin/Release/net10.0-android/android-arm64/app.jellyjam.radio-Signed.apk`. A validated copy is available at [artifacts/android/JellyJam-arm64.apk](artifacts/android/JellyJam-arm64.apk) in this workspace. The original universal APK is retained separately.
+The signed output is `src/JellyJam.MAUI/bin/Release/net10.0-android/android-arm64/app.jellyjam.radio-Signed.apk`. A validated copy is available at [artifacts/android/JellyJam-arm64.apk](artifacts/android/JellyJam-arm64.apk) in this workspace. The original universal APK is retained separately.
 
 A generic "not compatible" installer message does not establish the cause. The original APK already includes ARM64, requires Android 8.0 or newer, and passes signature/alignment checks; those requirements fit the S23. The phone-specific package is an alternative to test, not a confirmed fix for that report. Targeting a newer Android SDK does not by itself require that Android version on the phone; the minimum SDK controls that requirement.
 
@@ -215,7 +215,7 @@ JellyJam prioritizes a small, radio-like experience. Playlist editing, offline d
 | [JellyJam.Console](src/JellyJam.Console/JellyJam.Console.csproj) | `net10.0-windows` | Commands, prompts, keyboard input, themed rendering, and the DI composition root. |
 | [JellyJam.Core](src/JellyJam.Core/JellyJam.Core.csproj) | `net10.0` | Models, interfaces, selection/history, playback coordination, Jellyfin integration, and ordinary configuration storage. |
 | [JellyJam.Infrastructure.Windows](src/JellyJam.Infrastructure.Windows/JellyJam.Infrastructure.Windows.csproj) | `net10.0-windows` | NAudio streaming/output and DPAPI credential storage. |
-| [JellyJam.Android](src/JellyJam.Android/JellyJam.Android.csproj) | `net10.0-android` | MAUI login/radio screens, Android secure storage, native audio, and foreground media service. |
+| [JellyJam.MAUI](src/JellyJam.MAUI/JellyJam.MAUI.csproj) | `net10.0-android` | MAUI login/radio screens, Android secure storage, native audio, and foreground media service. |
 | [JellyJam.Tests](tests/JellyJam.Tests/JellyJam.Tests.csproj) | `net10.0-windows` | xUnit tests, SDK HTTP fakes, process-level CLI checks, rendering tests, and opt-in real audio verification. |
 
 Console references Core and the Windows adapters; the Windows adapters reference Core. Android references only Core and provides its platform implementations. Core references neither presentation nor platform APIs. Its `RadioSession` manages cached sign-in and lifecycle for mobile, while `PlaybackCoordinator` owns shared playback behavior.
@@ -247,3 +247,12 @@ dotnet publish src/JellyJam.Console -c Release -r win-x64 --self-contained false
 ```
 
 This produces a framework-dependent Windows x64 application requiring the .NET 10 runtime. Close running copies before rebuilding the same output directory; Windows locks loaded assemblies. Pause/resume, seeking, in-app volume controls, and gapless playback are not implemented; Android volume uses the system media controls.
+
+
+## Future Plans
+
+JellyJam currently plays music from a single Jellyfin server. The goal is to turn it into a virtual radio receiver:
+
+- **Multiple stations:** Set up several Jellyfin servers, with each one treated as its own radio station.
+- **Tuning interface:** Move across a frequency dial to switch stations. White noise and static will blend in between stations to make tuning feel like a real radio.
+- **Station-specific audio effects:** Give each station its own lo-fi effects, such as downsampling, bandwidth limits, or bit-depth reduction, so stations can sound like AM, FM, or older broadcast radio.

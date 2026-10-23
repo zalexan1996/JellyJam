@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/JellyJam.Core/JellyJam.Core.csproj" />
+  <Project Path="src/JellyJam.MAUI/JellyJam.MAUI.csproj" />
+</Solution>

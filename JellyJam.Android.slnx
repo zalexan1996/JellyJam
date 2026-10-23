@@ -1,4 +1,0 @@
-<Solution>
-  <Project Path="src/JellyJam.Core/JellyJam.Core.csproj" />
-  <Project Path="src/JellyJam.Android/JellyJam.Android.csproj" />
-</Solution>

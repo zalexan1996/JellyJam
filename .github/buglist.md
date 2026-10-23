@@ -1,0 +1,5 @@
+1. Connecting to a jellyfin server takes a long time and the "loading" icon appears below everything. Can we speed this up somehow and replace the play button icon with the loading icon while it is loading or buffer?
+2. When another app seizes playback and I go back into JEllyJAm, the playback state is messed up and won't let me play songs. I have to force close and re-open the app for playback to work
+3. Let's bottom align the random and repeat buttons, have the playack panel not expand, and have the track name scroll horizontally. Currently with large track names, the panel expands and requires me to scroll to have to see other controls.
+4. When I don't have the Spectrum enabled, I want the empty spectrum to collapse visibility. This should cause the playback panel to shrink in size along with it. 
+5. Due to there being 4 random buttons and 3 repeat buttons, the random icons are all smaller. Have one row that is 50/50 for the RANDOM and REPEAT labels, then a row below for the 7 icons taking up dynamic space equally 

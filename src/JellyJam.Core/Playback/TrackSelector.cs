@@ -41,24 +41,32 @@ public sealed class TrackSelector
     {
         if (naturalCompletion && RepeatMode == RepeatMode.Song && Current is { } current && !failed.Contains(current.Id))
             return current;
-        while (cursor + 1 < history.Count)
-        {
-            cursor++;
-            if (!failed.Contains(history[cursor].Id)) return history[cursor];
-        }
+        if (AdvanceThroughHistory() is { } replayed) return replayed;
         while (upcoming.TryPeek(out var candidate) && failed.Contains(candidate.Id)) upcoming.Dequeue();
         if (upcoming.Count == 0 && RepeatMode == RepeatMode.Album && anchor is not null) Refill();
         if (!upcoming.TryDequeue(out var next)) return null;
         history.Add(next);
         cursor = history.Count - 1;
         pending = true;
-        if (anchor is null)
-        {
-            anchor = next;
-            if (RandomMode is RandomMode.Artist or RandomMode.Album || RepeatMode == RepeatMode.Album)
-                Refill(next.Id);
-        }
+        if (anchor is null) AnchorTo(next);
         return next;
+    }
+
+    private Track? AdvanceThroughHistory()
+    {
+        while (cursor + 1 < history.Count)
+        {
+            cursor++;
+            if (!failed.Contains(history[cursor].Id)) return history[cursor];
+        }
+        return null;
+    }
+
+    private void AnchorTo(Track track)
+    {
+        anchor = track;
+        if (RandomMode is RandomMode.Artist or RandomMode.Album || RepeatMode == RepeatMode.Album)
+            Refill(track.Id);
     }
 
     public Track? Previous()
