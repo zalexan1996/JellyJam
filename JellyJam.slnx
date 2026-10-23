@@ -1,0 +1,6 @@
+<Solution>
+	<Project Path="src/JellyJam.Console/JellyJam.Console.csproj" />
+	<Project Path="src/JellyJam.Core/JellyJam.Core.csproj" />
+	<Project Path="src/JellyJam.Infrastructure.Windows/JellyJam.Infrastructure.Windows.csproj" />
+	<Project Path="tests/JellyJam.Tests/JellyJam.Tests.csproj" />
+</Solution>

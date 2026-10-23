@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="JellyJam.Tests" />
+    <ProjectReference Include="../JellyJam.Core/JellyJam.Core.csproj" />
+    <PackageReference Include="NAudio" Version="3.3.0" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.13" />
+  </ItemGroup>
+</Project>

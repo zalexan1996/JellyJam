@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<svg xmlns="http://www.w3.org/2000/svg" width="456" height="456" viewBox="0 0 456 456">
+  <!-- Magenta channel, shifted right -->
+  <g transform="translate(9 0)" fill="none" stroke="#FF2BD6" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M138 232C138 140 318 140 318 232Q228 256 138 232Z" fill="#FF2BD6" fill-opacity="0.55" />
+    <path d="M168 248Q150 280 170 306T168 352M203 252Q185 290 205 318T203 364M238 254Q220 292 240 320T238 366M273 252Q255 290 275 318T273 364M298 248Q280 280 300 306T298 352" />
+  </g>
+  <!-- Cyan channel, shifted left -->
+  <g transform="translate(-9 0)" fill="none" stroke="#00F0FF" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M138 232C138 140 318 140 318 232Q228 256 138 232Z" fill="#00F0FF" fill-opacity="0.55" />
+    <path d="M168 248Q150 280 170 306T168 352M203 252Q185 290 205 318T203 364M238 254Q220 292 240 320T238 366M273 252Q255 290 275 318T273 364M298 248Q280 280 300 306T298 352" />
+  </g>
+  <!-- White core -->
+  <g fill="none" stroke="#F4FBFF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M138 232C138 140 318 140 318 232Q228 256 138 232Z" fill="#1A0F3A" fill-opacity="0.85" />
+    <path d="M168 248Q150 280 170 306T168 352M203 252Q185 290 205 318T203 364M238 254Q220 292 240 320T238 366M273 252Q255 290 275 318T273 364M298 248Q280 280 300 306T298 352" />
+  </g>
+  <!-- Glitch slices -->
+  <g>
+    <rect x="112" y="178" width="120" height="8" fill="#00F0FF" />
+    <rect x="260" y="196" width="104" height="8" fill="#FF2BD6" />
+    <rect x="150" y="212" width="70" height="5" fill="#F4FBFF" />
+    <rect x="300" y="300" width="60" height="6" fill="#00F0FF" />
+    <rect x="96" y="322" width="64" height="6" fill="#FF2BD6" />
+  </g>
+</svg>
